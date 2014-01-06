@@ -6,10 +6,13 @@
 
 #define TAG 13
 void logIfMaster(int rank, const char * format, ...);
+
 int main(int argc, char *argv[]) {
   double *Ag, **A, *b, *bg, *x1, *x2, *last, *current, *tmp;
   double computationTime = 0.0, totalComputationTime = 0.0, checksum = 0.0, applicationTime = 0.0, startComputationTime = 0.0, endComputationTime = 0.0, sum_a, max_diff, local_max_diff, diff, epsilon; 
   int numElements, offset, stripSize, myrank, numnodes, c, N, i, j, k, it_count;
+  double alfa=0.5;
+  double error=0.0;
   MPI_Datatype strip;
 
   MPI_Init(&argc, &argv);
@@ -20,11 +23,10 @@ int main(int argc, char *argv[]) {
   if (myrank == 0)
 	  applicationTime = MPI_Wtime();
   c = atoi(argv[1]);
-  N = (c>0) ? c * 1024 : 2;
+  N = (c>0) ? c * 1024 : 4;
   epsilon = pow(10, -(atoi(argv[2])));
 
   it_count = 0;
-  
   /*//Logging
   char logFileName[16];
   snprintf(logFileName, 16, "log_%d.txt",myrank); 
@@ -72,17 +74,18 @@ int main(int argc, char *argv[]) {
       for (j=0; j<N; j++) {
         Ag[i*N + i]+=Ag[i*N + j];
       }
-    } 
+    }
+
   } else { // Test case
       Ag[0] = 2.0;  Ag[1] = 1.0; Ag[2] = 5.0;  Ag[3] = 7.0;
-      //Ag[4] = 1.0;  Ag[5] = -4.0; Ag[6] = 2.0;  Ag[7] = 1.0;
-      //Ag[8] = -1.0; Ag[9] = 2.0;  Ag[10] = 4.0; Ag[11] = 1.0;
-      //Ag[12] = 1.0; Ag[13] = 2.0; Ag[14] = 1.0; Ag[15] = -4.0;
+      Ag[4] = 1.0;  Ag[5] = -4.0; Ag[6] = 2.0;  Ag[7] = 1.0;
+      Ag[8] = -1.0; Ag[9] = 2.0;  Ag[10] = 4.0; Ag[11] = 1.0;
+      Ag[12] = 1.0; Ag[13] = 2.0; Ag[14] = 1.0; Ag[15] = -4.0;
       
-      bg[0] = 11.0;  bg[1] = 13.0;  //bg[2] = 2.0;  bg[3] = 2.0;
+      bg[0] = 11.0;  bg[1] = 13.0;  bg[2] = 2.0;  bg[3] = 2.0;
       
-      x1[0] = 1;// bg[0]; 
-      x1[1] = 1; //bg[1]; x1[2] = bg[2]; x1[3] = bg[3];
+      x1[0]= bg[0]; 
+      x1[1] =bg[1]; x1[2] = bg[2]; x1[3] = bg[3];
     }
   }
        
@@ -98,6 +101,7 @@ int main(int argc, char *argv[]) {
 
   do {
     //Main computation
+    startComputationTime = MPI_Wtime();
     offset = stripSize * myrank;
     for (i=0; i<stripSize; i++) {
       sum_a = 0.0;
@@ -107,17 +111,24 @@ int main(int argc, char *argv[]) {
       for (j=offset+i+1; j<N; j++){
         sum_a += A[i][j]*last[j]; 
       }
-      current[i] = (b[i] - sum_a)/A[i][offset + i];
+      current[offset+i] =alfa* (b[i] - sum_a)/A[i][offset + i]+(1-alfa)*last[offset+i];
     }
-    //End of main computation
     
+    endComputationTime = MPI_Wtime();
+    computationTime += endComputationTime - startComputationTime;   
+
+    //End of main computation
+
+    MPI_Gather(&current[offset], stripSize, MPI_DOUBLE, current, stripSize, MPI_DOUBLE, 0,MPI_COMM_WORLD);
+    MPI_Bcast(current,N,MPI_DOUBLE,0,MPI_COMM_WORLD);
+
     //Calculate my local max diff
-    local_max_diff = fabs(current[0] - last[0]);
-    printf("[r=%d]current[0]: %e, last[0]: %e, diff[0]: %e\n", myrank, current[0],last[0],local_max_diff);
+
+    local_max_diff = fabs(1 - last[0]/current[0]);
+
     diff = 0.0;
     for (i=1; i<stripSize; i++) {
-      diff = fabs(current[i] - last[i]);
-      printf("[r=%d]current[i]: %e, last[i]: %e, diff[i]: %e\n", myrank, current[i],last[i],diff);
+      diff = fabs(1- last[i]/current[i]);      
       if (diff > local_max_diff) local_max_diff = diff;
     }
     
@@ -125,23 +136,42 @@ int main(int argc, char *argv[]) {
     tmp = last;
     last = current;
     current = tmp;
+
+    it_count++;
     
     //calculate convergence : max (local_max_errors) > epsilon
+
     MPI_Allreduce(&local_max_diff, &max_diff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    printf ("Iteration: %d, diff: %e\n",it_count++,max_diff);
-    
-  } while (max_diff > epsilon);
+    if(myrank==0) printf ("Iteration: %d, current: %e, diff: %e\n",it_count,last[0],max_diff);
+
+  } while (max_diff > epsilon); 
+
   MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Reduce(&computationTime, &totalComputationTime, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
   if (myrank == 0)
     for (i = 0; i < N; i++)
-      printf("x1[%d]=%f x2[%d]=%f \n",i,x1[i],i,x2[i]);
-  /*free(*A);
+      printf("x[%d]=%f\n",i,last[i]);
+      
+  if (myrank == 0) {
+    for (i=0; i<N; i++) 
+        checksum += last[i];
+	applicationTime = MPI_Wtime() - applicationTime;
+	printf("Checksum: %e, Application time: %f, Total time: %f\n",checksum, applicationTime, totalComputationTime);
+  }
+
+
+  if (myrank==0) {
+	free(Ag);
+	free(bg);
+  }
+
+  free(*A);
   free(A);
   free(b);
-  free(bg);
-  free(Ag);
   free(x1);
-  //close log*/
+  free(x2);
+
   MPI_Finalize();
   return 0;
 
