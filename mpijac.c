@@ -144,40 +144,33 @@ int main(int argc, char *argv[]) {
     
     //Calculate convergence : max_diff = max (local_max_errors) > epsilon
     MPI_Allreduce(&local_max_diff, &max_diff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-
+    it_count++;
   } while (max_diff > epsilon); 
 //End of Jacobi iterations  =========================================================
 
-  //MPI_Barrier(MPI_COMM_WORLD);
-  MPI_Reduce(&computationTime, &totalComputationTime, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+//Add up the computation time of all nodes ==========================================
+  MPI_Reduce(&computationTime, &totalComputationTime, 1, MPI_DOUBLE, MPI_SUM, 0, 
+              MPI_COMM_WORLD);
 
-  if (myrank == 0)
-    PrintVector(current, N);
-      
+
+//Print the results =================================================================
   if (myrank == 0) {
+    PrintVector(current, N);
     for (i=0; i<N; i++) 
         checksum += last[i];
-        
-	applicationTime = MPI_Wtime() - applicationTime;
-	printf("Checksum: %e, Application time: %f, Total time: %f\n",checksum, 
-	        applicationTime, totalComputationTime);
+    applicationTime = MPI_Wtime() - applicationTime;
+	  printf("Checksum: %e, Iterations: %d, Application time: %f, Total time: %f\n",checksum, 
+	          it_count, applicationTime, totalComputationTime);
   }
 
-
-  if (myrank==0) {
-	free(Ag);
-	free(bg);
-  }
-
-  free(*A);
-  free(A);
+//Free memory =======================================================================
+  if (myrank==0) { free(Ag); free(bg); }
+  free(*A); free(A);
+  free(x1); free(x2);
   free(b);
-  free(x1);
-  free(x2);
 
   MPI_Finalize();
   return 0;
-
 }
 
 void logIfMaster(int rank, const char * format, ...)
