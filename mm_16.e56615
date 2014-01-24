@@ -1,0 +1,5 @@
+Currently Loaded Modulefiles:
+  1) modules     2) gcc/4.4.7
+--------------------------------------------------------------------------
+mpirun noticed that process rank 0 with PID 7638 on node aolin16.uab.es exited on signal 9 (Killed).
+--------------------------------------------------------------------------
