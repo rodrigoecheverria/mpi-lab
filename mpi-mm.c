@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
 
 // Computation ======================================================================
-  starLocalComputationTime = MPI_Wtime();
+  startLocalComputationTime = MPI_Wtime();
  
 // Initialize C to 0
   for (i = 0; i < stripSize; i++)
@@ -104,9 +104,9 @@ int main(int argc, char *argv[]) {
 
 // Stop timer & reduce start and end
   endLocalComputationTime = MPI_Wtime();
-  MPI_Reduce(&starLocalComputationTime, &starGlobalComputationTime, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&startLocalComputationTime, &startGlobalComputationTime, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
   MPI_Reduce(&endLocalComputationTime, &endGlobalComputationTime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-  if (myrank == 0) computationTime = endGlobalComputationTime - starGlobalComputationTime;
+  if (myrank == 0) computationTime = endGlobalComputationTime - startGlobalComputationTime;
 // Computation End ==================================================================
 
 //Receive Computed Data =============================================================
