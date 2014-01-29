@@ -8,8 +8,8 @@ void PrintMatrix(double **Mat, int N, int M);
 
 int main(int argc, char *argv[]) {
   double **A, **B, **C, *tmp;
-  double computationTime = 0.0, totalComputationTime = 0.0, checksum = 0.0, 
-         applicationTime = 0.0, startComputationTime = 0.0, endComputationTime = 0.0; 
+  double  applicationTime = 0.0, computationTime = 0.0, startGlobalComputationTime = 0.0, endGlobalComputationTime = 0.0,
+			 startLocalComputationTime = 0.0, endLocalComputationTime = 0.0, checksum = 0.0; 
   int numElements, offset, stripSize, myrank, numnodes, N, M, i, j, k;
   
 // Initialization =================================================================== 
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
 
 // Computation ======================================================================
-  startComputationTime = MPI_Wtime();
+  starLocalComputationTime = MPI_Wtime();
  
 // Initialize C to 0
   for (i = 0; i < stripSize; i++)
@@ -102,9 +102,11 @@ int main(int argc, char *argv[]) {
       for (k = 0; k < N; k++)
 	      C[i][j] += A[i][k] * B[j][k]; //B is transposed
 
-// Stop timer
-  endComputationTime = MPI_Wtime();
-  computationTime += endComputationTime - startComputationTime;
+// Stop timer & reduce start and end
+  endLocalComputationTime = MPI_Wtime();
+  MPI_Reduce(&starLocalComputationTime, &starGlobalComputationTime, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&endLocalComputationTime, &endGlobalComputationTime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+  if (myrank == 0) computationTime = endGlobalComputationTime - starGlobalComputationTime;
 // Computation End ==================================================================
 
 //Receive Computed Data =============================================================
@@ -121,10 +123,6 @@ int main(int argc, char *argv[]) {
     MPI_Send(C[0], stripSize * M, MPI_DOUBLE, 0, TAG, MPI_COMM_WORLD);
   }
   
-// Add up the computation time of all nodes ========================================= 
-  MPI_Reduce(&computationTime, &totalComputationTime, 1, MPI_DOUBLE, MPI_SUM, 0, 
-              MPI_COMM_WORLD);
-  
 // Calculate the checksum ===========================================================
   if (myrank == 0) {
     for (i=0; i<M; i++) 
@@ -135,8 +133,8 @@ int main(int argc, char *argv[]) {
   if (myrank == 0) {
 	  applicationTime = MPI_Wtime() - applicationTime;
     //PrintMatrix(C,M,M);
-	  printf("Checksum: %f, Application time: %f, Total time: %f\n",checksum, 
-	          applicationTime, totalComputationTime);
+	  printf("Checksum: %f, Application time: %f, Total computation time: %f\n", checksum, 
+	          applicationTime, computationTime);
   }
     
   free(*A);
