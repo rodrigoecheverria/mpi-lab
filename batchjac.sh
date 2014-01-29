@@ -16,5 +16,6 @@ qsub scriptjac_32_16.sh
 
 qsub scriptjac_4_24.sh
 qsub scriptjac_8_24.sh
-qsub scriptjac_16_24.sh
+qsub scriptjac_16_24a.sh
+qsub scriptjac_16_24b.sh
 qsub scriptjac_32_24.sh

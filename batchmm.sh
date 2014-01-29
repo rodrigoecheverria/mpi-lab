@@ -1,4 +1,10 @@
-qsub scriptmm4.sh
-qsub scriptmm8.sh
-qsub scriptmm16.sh
-qsub scriptmm32.sh
+qsub scriptmm4a.sh
+qsub scriptmm4b.sh
+qsub scriptmm4c.sh
+qsub scriptmm4d.sh
+qsub scriptmm8a.sh
+qsub scriptmm8b.sh
+qsub scriptmm16a.sh
+qsub scriptmm16b.sh
+qsub scriptmm32a.sh
+qsub scriptmm32b.sh
