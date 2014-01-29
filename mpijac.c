@@ -10,8 +10,9 @@ void PrintVector(double *Vec, int N);
 
 int main(int argc, char *argv[]) {
   double *Ag, **A, *b, *bg, *x1, *x2, *last, *current, *tmp,
-         computationTime = 0.0, totalComputationTime = 0.0, applicationTime = 0.0,
-         startComputationTime = 0.0, endComputationTime = 0.0, 
+         applicationTime = 0.0, computationTime = 0.0,  
+         startLocalComputationTime = 0.0, endLocalComputationTime = 0.0, 
+		 startGlobalComputationTime = 0.0, endGlobalComputationTime = 0.0, 
          sum_a, max_diff, local_max_diff, diff, epsilon, checksum = 0.0,
          alfa=0.5,error=0.0;
   int numElements, offset, stripSize, myrank, numnodes, c, N, i, j, k, it_count;
@@ -105,7 +106,7 @@ int main(int argc, char *argv[]) {
 
   do {
     //Main computation ==============================================================
-    startComputationTime = MPI_Wtime();
+    startLocalComputationTime = MPI_Wtime();
     
     offset = stripSize * myrank;
     for (i=0; i<stripSize; i++) {
@@ -120,8 +121,10 @@ int main(int argc, char *argv[]) {
                           (1 - alfa) * last[offset + i];
     }
     
-    endComputationTime = MPI_Wtime();
-    computationTime += endComputationTime - startComputationTime;   
+    endLocalComputationTime = MPI_Wtime();
+	MPI_Reduce(&startLocalComputationTime, &startGlobalComputationTime, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&endLocalComputationTime, &endGlobalComputationTime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+	if (myrank == 0) computationTime += endGlobalComputationTime - startGlobalComputationTime;
     //End of main computation =======================================================
 
     // Get the new solution & redistribute it
@@ -129,29 +132,32 @@ int main(int argc, char *argv[]) {
                 MPI_DOUBLE, 0,MPI_COMM_WORLD);
     MPI_Bcast(current,N,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
-    //Calculate my local max difference
+    //Calculate my local max difference ==================================================
+	 startLocalComputationTime = MPI_Wtime();
+	 
     local_max_diff = fabs(1 - last[0]/current[0]);
     diff = 0.0;
     for (i=1; i<stripSize; i++) {
       diff = fabs(1- last[i]/current[i]);      
       if (diff > local_max_diff) local_max_diff = diff;
     }
-    
+	
     //Interchange x-buffers
     tmp = last;
     last = current;
     current = tmp;
-    
+	
+	endLocalComputationTime = MPI_Wtime();
+	MPI_Reduce(&startLocalComputationTime, &startGlobalComputationTime, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&endLocalComputationTime, &endGlobalComputationTime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD); 
+	if (myrank == 0) computationTime += endGlobalComputationTime - startGlobalComputationTime;
+    //End of calculation of local difference
+	
     //Calculate convergence : max_diff = max (local_max_errors) > epsilon
     MPI_Allreduce(&local_max_diff, &max_diff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     it_count++;
   } while (max_diff > epsilon); 
 //End of Jacobi iterations  =========================================================
-
-//Add up the computation time of all nodes ==========================================
-  MPI_Reduce(&computationTime, &totalComputationTime, 1, MPI_DOUBLE, MPI_SUM, 0, 
-              MPI_COMM_WORLD);
-
 
 //Print the results =================================================================
   if (myrank == 0) {
@@ -159,8 +165,8 @@ int main(int argc, char *argv[]) {
     for (i=0; i<N; i++) 
         checksum += last[i];
     applicationTime = MPI_Wtime() - applicationTime;
-	  printf("Checksum: %e, Iterations: %d, Application time: %f, Total time: %f\n",checksum, 
-	          it_count, applicationTime, totalComputationTime);
+	  printf("Checksum: %e, Iterations: %d, Application time: %f, Total computation time: %f\n",checksum, 
+	          it_count, applicationTime, computationTime);
   }
 
 //Free memory =======================================================================
